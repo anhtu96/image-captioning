@@ -1,0 +1,12 @@
+### gitignore
+# notebook checkpoints and cache
+.ipynb_checkpoints/
+__pycache__/
+
+# embedding files
+embedding/*
+
+# dataset files
+datasets/Flickr8k_Dataset.zip
+datasets/Flickr8k_text.zip
+datasets/Flicker8k_Dataset/*
