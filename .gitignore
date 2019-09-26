@@ -10,3 +10,7 @@ embedding/*
 datasets/Flickr8k_Dataset.zip
 datasets/Flickr8k_text.zip
 datasets/Flicker8k_Dataset/*
+
+# keep folder
+!datasets/Flicker8k_Dataset/.gitkeep
+!embedding/.gitkeep
