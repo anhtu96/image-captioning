@@ -13,7 +13,7 @@ class Captioning(object):
     """
     A class containing model, parameters... Can be used to train and generate new captions for new images.
     """
-    def __init__(self, encoder, decoder, criterion, optimizer, num_epochs, print_every):
+    def __init__(self, encoder, decoder, criterion, optimizer, num_epochs, lr_scheduler=None, print_every=10):
         """
         Construct a new instance.
         
@@ -30,12 +30,13 @@ class Captioning(object):
         else:
             self.device = 'cpu'
             
-        self.encoder = encoder.to(device=self.device)
-        self.decoder = decoder.to(device=self.device)
+        self.encoder = encoder.to(device=self.device).eval()
+        self.decoder = decoder.to(device=self.device).train()
         self.criterion = criterion
         self.optimizer = optimizer
         self.num_epochs = num_epochs
         self.print_every = print_every
+        self.lr_scheduler = lr_scheduler
             
                 
     def train(self, dataloader):
@@ -45,6 +46,7 @@ class Captioning(object):
         Input:
         - dataloader: a DataLoader
         """
+        self.decoder.train()
         for epoch in range(self.num_epochs):
             print('Epoch %d' %epoch)
             print('--------')
@@ -60,9 +62,11 @@ class Captioning(object):
                 self.optimizer.step()
                 if i % self.print_every == 0:
                     print('Iter %d: loss = %f' %(i, loss.item()))
+            if self.lr_scheduler:
+                self.lr_scheduler.step()
               
               
-    def generate_caption(self, image_name, word_to_idx, idx_to_word, max_length):
+    def generate_caption(self, image_name, word_to_idx, idx_to_word, max_length, beam_search=True, k=3):
         """
         Generate caption for an image.
         
@@ -83,4 +87,17 @@ class Captioning(object):
         plt.imshow(image)
         plt.axis('off')
         plt.show()
-        print('Generated caption: ', self.decoder.sample(vgg_features, word_to_idx, idx_to_word, max_length, self.device))
+        self.decoder.eval()
+        print('Generated caption: ', self.decoder.sample(vgg_features, word_to_idx, idx_to_word, max_length, beam_search, k, self.device))
+        
+    def save_state_dict(self, name):
+        """
+        Save model's state dict for future use
+        """
+        torch.save(self.decoder.state_dict(), name)
+        
+    def load_state_dict(self, name):
+        """
+        Load pretrained state dict
+        """
+        self.decoder.load_state_dict(torch.load(name))
