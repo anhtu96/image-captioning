@@ -5,6 +5,7 @@ Created on Mon Sep 23 21:00:28 2019
 @author: tungo
 """
 import numpy as np
+import string
 
 
 def get_embedding_dict(filename):
@@ -17,7 +18,7 @@ def get_embedding_dict(filename):
     Return:
     - embedding_dict: dictionary contains embedding vectors (values) for all words (keys)
     """
-    file = open(filename, 'r')
+    file = open(filename, 'r', encoding='utf8')
     embedding_dict = {}
     for line in file.read().split('\n'):
         words = line.split(' ')
@@ -37,7 +38,7 @@ def get_images_list(filename):
     Return:
     - images: list containing all image names
     """
-    file = open(filename, 'r')
+    file = open(filename, 'r', encoding='utf8')
     images = [img for img in file.read().split('\n') if img != '']
     return images
     
@@ -54,8 +55,9 @@ def get_captions(filename, image_list):
     Returns:
     - captions: dictionary with keys are image names and values are list of corresponding captions
     """
-    file = open(filename, 'r')
+    file = open(filename, 'r', encoding='utf8')
     captions = {}
+    table = str.maketrans('A', 'a', string.punctuation)
     for line in file.read().split('\n'):
         words = line.split()
         if len(words) < 2:
@@ -66,7 +68,7 @@ def get_captions(filename, image_list):
             if words[0][:-2] not in captions:
                 captions[words[0][:-2]] = []
             # lower all captions, then add '<START>' and '<END>'
-            captions[words[0][:-2]].append('<START> ' + ' '.join(words[1:]).lower() + ' <END>')
+            captions[words[0][:-2]].append('<START> ' + ' '.join(words[1:]).lower().translate(table) + ' <END>')
     return captions
 
 
