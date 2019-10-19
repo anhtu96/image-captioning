@@ -15,7 +15,10 @@ class Encoder(nn.Module):
     def __init__(self):
         super(Encoder, self).__init__()
         self.vgg = models.vgg19(pretrained=True)
-        self.vgg.classifier = self.vgg.classifier[:6]  # remove last fc layer
+        
+        # remove classifier layers since we need to keep spatial information (num of pixels) to use Attention over pixel locations, not classify
+        modules = list(self.vgg.children())[:-1]
+        self.vgg = nn.Sequential(*modules)
         for params in self.vgg.parameters():
             params.requires_grad = False
 
@@ -27,9 +30,9 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     """
-    Decoder uses images' features from Encoder as initial hidden states for LSTM layer, feeds embedded ground-truth captions into this LSTM layer to generate predicted captions.
+    Decoder with Attention.
     """
-    def __init__(self, pretrained=False, embedding_matrix=None, vocab_size=0, embed_dim=0):
+    def __init__(self, pretrained=False, embedding_matrix=None, vocab_size=0, embed_dim=256, hidden_size=256):
         """
         Construct a new Decoder.
     
@@ -38,8 +41,20 @@ class Decoder(nn.Module):
         - embedding_matrix: a numpy embedding matrix
         - vocab_size: number of all words
         - embed_dim: embedding dimension
+        - hidden_size: hidden size of LSTM
         """
         super(Decoder, self).__init__()
+        # MLPs to generate initial hidden state and cell state
+        self.init_h = nn.Linear(512, hidden_size)
+        self.init_c = nn.Linear(512, hidden_size)
+        
+        # alignment model
+        self.Wa = nn.Linear(hidden_size, hidden_size)
+        self.Ua = nn.Linear(512, hidden_size)
+        self.Va = nn.Linear(hidden_size, 1)
+        self.softmax = nn.Softmax(dim=1)
+        
+        # embedding and LSTM
         if pretrained == True:
             vocab_size = embedding_matrix.shape[0]
             embed_dim = embedding_matrix.shape[1]
@@ -49,35 +64,54 @@ class Decoder(nn.Module):
                 params.requires_grad = False  # no need to train embedding layer
         else:
             self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.lstm = nn.LSTM(embed_dim, 4096, batch_first=True)  # hidden_size = 4096, the same as output's dimension from Encoder
-        self.linear = nn.Linear(4096, vocab_size)
+        self.lstm = nn.LSTM(embed_dim + 512, hidden_size, batch_first=True)  # hidden_size = 4096, the same as output's dimension from Encoder
+        self.linear = nn.Linear(hidden_size, vocab_size)
+        
+    def init_hidden_state(self, enc_out):
+        """
+        Initialize hidden state and cell state with mean values of encoder output along pixels
+        
+        Input:
+        - enc_out: output from the Encoder with size (batch, no. of pixels, encoder dim)
+        
+        Return:
+        - h and c: initial hidden states and cell states
+        """
+        enc_out_mean = torch.mean(enc_out, dim=1)
+        h = self.init_h(enc_out_mean).unsqueeze(0)
+        c = self.init_c(enc_out_mean).unsqueeze(0)
+        return h, c
     
 
-    def forward(self, captions, features):
+    def forward(self, dec_input, h, c, enc_out):
         """
-        Forward pass.
+        Forward pass at 1 timestep.
         
         Inputs:
-        - captions: tensor of encoded captions, with shape (N x T)
-        - features: tensor of images' features after Encoder layer, with shape (N x H)
+        - dec_input: input to the Decoder with size (batch)
+        - h, c: hidden and cell state from previous timestep with size (1, batch, hidden size)
+        - enc_out: Encoder's output (batch, no. of pixels, encoder dim)
     
         Return:
-        - tensor with shape (N x H x V)
+        - out: (batch, 1, hidden size)
         """
-        embedding = self.embedding(captions)
-        h0 = features.unsqueeze(0)  # initial hidden states = features from Encoder
-        c0 = torch.zeros_like(h0)  # initial cell states = all zeros
-        out_lstm, _ = self.lstm(embedding, (h0, c0))
+        h_t = h.permute(1, 0, 2)
+        energies = self.Va(torch.tanh(self.Wa(h_t) + self.Ua(enc_out)))
+        alphas = self.softmax(energies)
+        context = torch.sum(alphas * enc_out, dim=1).unsqueeze(1)
+        embedding = self.embedding(dec_input.unsqueeze(1))
+        lstm_in = torch.cat((embedding, context), dim=-1)
+        out_lstm, (h, c) = self.lstm(lstm_in, (h, c))
         out = self.linear(out_lstm)
-        return out
+        return out, h, c
   
 
-    def sample(self, features, word_to_idx, idx_to_word, max_length, beam_search=True, k=3, device='cpu'):
+    def sample(self, enc_out, word_to_idx, idx_to_word, max_length, beam_search=True, k=3, device='cpu'):
         """
         Generate captions by generating 1 word at each timestep.
     
         Inputs:
-        - features: encoded features of 1 image, with shape (1 x H)
+        - enc_out: encoded features of 1 image, with shape (1, hidden size)
         - word_to_idx: dictionary
         - idx_to_word: list containing all words
         - max_length: max length of caption
@@ -87,27 +121,27 @@ class Decoder(nn.Module):
         Return:
         - captions: generated caption in string format
         """
-        start = torch.tensor(word_to_idx['<START>']).to(device=device)
+        start = torch.tensor(word_to_idx['<START>']).to(device=device, dtype=torch.long).unsqueeze(0)
     
         # captions will have length of "max_length", with '<START>' as 1st letter
         captions = []
         with torch.no_grad():
-            h = features.unsqueeze(0)
-            c = torch.zeros_like(h)
-            x = self.embedding(start).unsqueeze(0).unsqueeze(0)
+            enc_out = enc_out.view(enc_out.size(0), enc_out.size(1), -1)
+            enc_out = enc_out.permute(0, 2, 1)
+            h, c = self.init_hidden_state(enc_out)
+            dec_input = start
             
             # Greedy Search
             if beam_search == False or k == 1:
                 captions = ['<START>']
                 for i in range(max_length-1):
-                    out_lstm, (h, c) = self.lstm(x, (h, c))
-                    out = self.linear(out_lstm)
+                    out, h, c = self.forward(dec_input, h, c, enc_out)
                     _, predict = torch.max(out, -1)
                     next = predict.clone().cpu().numpy()[0][0]  # get string of next word
                     if idx_to_word[next] == '<END>':
                         break
                     captions.append(idx_to_word[next])
-                    x = self.embedding(predict)
+                    dec_input = predict.squeeze(1)
                 captions = ' '.join([word for word in captions if word != '<START>'])
                 return captions
         
@@ -123,8 +157,7 @@ class Decoder(nn.Module):
                 final_caption = ''
                 for i in range(max_length-1):
                     if i == 0:
-                        out_lstm, (h, c) = self.lstm(x, (h, c))
-                        out = self.linear(out_lstm)
+                        out, h, c = self.forward(dec_input, h, c, enc_out)
                         scores, preds = torch.topk(out, k, -1)
                         scores = scores.squeeze(0).squeeze(0)
                         preds = preds.squeeze(0).squeeze(0)
@@ -148,10 +181,8 @@ class Decoder(nn.Module):
                                     final_caption = ' '.join(row['caption'][1:-1])
                             else:
                                 caption_tmp.append(row['caption'])
-                                word_idx = torch.tensor(word_to_idx[row['caption'][-1]]).to(device=device)
-                                x = self.embedding(word_idx).unsqueeze(0).unsqueeze(0)
-                                out_lstm, (row['h'], row['c']) = self.lstm(x, (row['h'], row['c']))
-                                out = self.linear(out_lstm)
+                                word_idx = torch.tensor(word_to_idx[row['caption'][-1]]).unsqueeze(0).to(device=device)
+                                out, row['h'], row['c'] = self.forward(word_idx, row['h'], row['c'], enc_out)
                                 hidden_state_tmp.append({'h': row['h'], 'c': row['c']})
                                 scores, preds = torch.topk(out, k, -1)
                                 score_cat = torch.cat((score_cat, (torch.log(scores).squeeze(0).squeeze(0) + row['score'])))
