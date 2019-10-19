@@ -50,18 +50,23 @@ class Captioning(object):
         for epoch in range(self.num_epochs):
             print('Epoch %d' %epoch)
             print('--------')
-            for i, (img, caption) in enumerate(dataloader):
-                img, caption = img.to(device=self.device), caption.to(device=self.device, dtype=torch.long)
-                caption_in = caption[:, :-1]
-                caption_out = caption[:, 1:]
+            for i, (x, y) in enumerate(dataloader):
+                x, y = x.to(device=self.device), y.to(device=self.device, dtype=torch.long)
                 self.optimizer.zero_grad()
-                features = self.encoder(img)
-                out_lstm = self.decoder(caption_in, features)
-                loss = self.criterion(out_lstm.view(out_lstm.size(0)*out_lstm.size(1), -1), caption_out.contiguous().view(caption_out.size(0)*caption_out.size(1)))
+                enc_out = self.encoder(x)
+                enc_out = enc_out.view(enc_out.size(0), enc_out.size(1), -1)
+                enc_out = enc_out.permute(0, 2, 1)
+                h, c = self.decoder.init_hidden_state(enc_out)
+                dec_input = y[:, 0]
+                loss = 0
+                for t in range(1, y.size(1)):
+                    out, h, c = self.decoder(dec_input, h, c, enc_out)
+                    dec_input = y[:, t]
+                    loss += self.criterion(out.squeeze(1), y[:, t])
                 loss.backward()
                 self.optimizer.step()
                 if i % self.print_every == 0:
-                    print('Iter %d: loss = %f' %(i, loss.item()))
+                    print('Iter %d: loss = %f' %(i, loss.item() / y.size(1)))
             if self.lr_scheduler:
                 self.lr_scheduler.step()
               
