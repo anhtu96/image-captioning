@@ -7,7 +7,7 @@ The paper which I refer to is [Show, Attend and Tell: Neural Image Caption Gener
 ### Dataset
 Since I don't have a strong GPU for personal use, I use Google Colab. When it comes to dealing with large datasets with a huge number of files, it cannot handle so well. So instead of using big datasets like MSCOCO, I use Flickr8k dataset in this repository.
 
-The images are first resized to smaller size of '`224 x 224` and normalized to the mean = [0.485, 0.456, 0.406], variance = [0.229, 0.224, 0.225].
+The images are first resized to smaller size of `224 x 224` and normalized to the mean = [0.485, 0.456, 0.406], variance = [0.229, 0.224, 0.225].
 
 The raw captions are added `<START>` and `<END>` tokens and padded to the same length with `<PAD>`. After that they are encoded to vectors of indices so we can apply algorithms on them.
 ### Encoder-Decoder architecture
