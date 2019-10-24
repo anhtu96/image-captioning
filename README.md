@@ -61,9 +61,9 @@ At test time, **teacher forcing** is not used because we don't know the ground-t
 ### Beam search
 I use beam search only at test time. If we're using Beam search at train time, our loss function has to be changed because CrossEntropyLoss calculates the loss between the value with highest score and ground-truth label, whereas Beam search takes `k` values into account.
 
-To be noted that in my implementation, I don't compute overall score by taking product of score. Instead, I take the log of score then compute sum of these logs. According to Prof. Andrew Ng in the Sequence Models course, compute the product of tiny numbers can result in **numerical underflow**, so compute sum of logs will be less prone to this problem. I think this issue is only considerable when output scores are very small values.
+To be noted that in my implementation, I don't compute overall score by taking product of score. Instead, I take the log of score then compute sum of these logs. According to **Prof. Andrew Ng**'s explanation in his **Sequence Models** course, computing the product of tiny numbers can result in **numerical underflow**, so computing sum of logs will be less prone to this problem. I think this issue is only considerable when output scores are very small values.
 
-In other words, to maximize `P = P1 * P2 * P3 * ...`, we can maximize `log(P) = log(P1) + log(P2) + log(P3) + ...`
+In other words, to maximize `P = P1 * P2 * P3 * ...`, we can maximize `log(P) = log(P1) + log(P2) + log(P3) + ...` instead.
 
 ## Some examples
 * **Picture 1**
@@ -107,6 +107,6 @@ I haven't implemented a validation metric in this repository yet. Maybe in the f
 ## References
 1. [Show, Attend and Tell: Neural Image Caption Generation with Visual Attention](https://arxiv.org/abs/1502.03044).
 2. [Neural Machine Translation by Jointly Learning to Align and Translate](https://arxiv.org/abs/1409.0473) (for detailed math explanation).
-3. https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Image-Captioning
-4. RNN lecture from [Stanford University CS231n](http://cs231n.stanford.edu/syllabus.html)
-5. [Sequence Models from Coursera](https://www.coursera.org/learn/nlp-sequence-models/home/week/3)
+3. https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Image-Captioning.
+4. [RNN lecture from Stanford University CS231n](http://cs231n.stanford.edu/syllabus.html).
+5. [Week 3 of the Sequence Models course from Coursera](https://www.coursera.org/learn/nlp-sequence-models/home/week/3).
