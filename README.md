@@ -105,8 +105,8 @@ We can see that with larger beam size, the output captions seem to be more compl
 I haven't implemented a validation metric in this repository yet. Maybe in the future I'll use BLEU score for validation and early stopping.
 
 ## References
-1. [Show, Attend and Tell: Neural Image Caption Generation with Visual Attention](https://arxiv.org/abs/1502.03044).
-2. [Neural Machine Translation by Jointly Learning to Align and Translate](https://arxiv.org/abs/1409.0473) (for detailed math explanation).
+1. *Kelvin Xu, Jimmy Ba, Ryan Kiros, Kyunghyun Cho, Aaron Courville, Ruslan Salakhutdinov, Richard Zemel, Yoshua Bengio (2015).* [Show, Attend and Tell: Neural Image Caption Generation with Visual Attention](https://arxiv.org/abs/1502.03044).
+2. *Dzmitry Bahdanau, Kyunghyun Cho, Yoshua Bengio (2014)*. [Neural Machine Translation by Jointly Learning to Align and Translate](https://arxiv.org/abs/1409.0473) (for detailed math explanation).
 3. https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Image-Captioning.
 4. [RNN lecture from Stanford University CS231n](http://cs231n.stanford.edu/syllabus.html).
 5. [Week 3 of the Sequence Models course from Coursera](https://www.coursera.org/learn/nlp-sequence-models/home/week/3).
